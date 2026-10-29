@@ -7,7 +7,7 @@ on:
 
 jobs:
   verify-environment:
-    runs-on: [self-hosted, omen]
+    runs-on: self-hosted
 
     steps:
       - name: Check out repository code
