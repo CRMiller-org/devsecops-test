@@ -1,0 +1,25 @@
+name: OMEN Runner Verification
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  verify-environment:
+    runs-on: [self-hosted, omen]
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Verify System & Host Details
+        run: |
+          echo "Running on host: $(hostname)"
+          echo "User: $(whoami)"
+          uname -a
+
+      - name: Verify Docker Execution
+        run: |
+          docker --version
+          docker run --rm alpine echo "Docker container successfully executed inside WSL2 on OMEN!"
