@@ -7,9 +7,17 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
   security-and-build:
-    name: Security Scan & Build
+    name: Security Scan, Build & Push
     runs-on: self-hosted
 
     steps:
@@ -24,18 +32,19 @@ jobs:
           CMD ["cat", "/test.txt"]
           EOF
 
-          docker build -t devsecops-test:${{ github.sha }} .
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest .
 
-      - name: Container Image Vulnerability Scan
+      - name: Container Image Vulnerability Scan (Strict Gating)
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy:latest image \
             --severity HIGH,CRITICAL \
-            --exit-code 0 \
-            devsecops-test:${{ github.sha }}
+            --exit-code 1 \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Generate Container SBOM (SPDX Format)
+        if: always()
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
@@ -44,13 +53,20 @@ jobs:
             aquasec/trivy:latest image \
             --format spdx-json \
             --output sbom.spdx.json \
-            devsecops-test:${{ github.sha }}
-
-      - name: Display & Archive SBOM
-        run: cat sbom.spdx.json
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Archive SBOM Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sbom-spdx-${{ github.sha }}
           path: sbom.spdx.json
+
+      - name: Log in to GitHub Container Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+      - name: Push Image to Registry
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
