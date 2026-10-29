@@ -32,4 +32,23 @@ jobs:
             aquasec/trivy:latest image \
             --severity HIGH,CRITICAL \
             --exit-code 0 \
-            devsecops-test:${{ github
+            devsecops-test:${{ github.sha }}
+
+      - name: Generate Container SBOM (SPDX Format)
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v ${{ github.workspace }}:/src \
+            aquasec/trivy:latest image \
+            --format spdx-json \
+            --output /src/sbom.spdx.json \
+            devsecops-test:${{ github.sha }}
+
+      - name: Display & Archive SBOM
+        run: cat sbom.spdx.json
+
+      - name: Archive SBOM Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-spdx-${{ github.sha }}
+          path: sbom.spdx.json
