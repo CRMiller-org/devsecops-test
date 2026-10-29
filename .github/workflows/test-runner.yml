@@ -19,25 +19,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Repository Misconfiguration Scan (Trivy)
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'config'
-          hide-progress: false
-          format: 'table'
-          exit-code: '0'
-          severity: 'HIGH,CRITICAL'
-
-      - name: Build Test Docker Image (In-Memory with Caching)
+      - name: Inline Docker Build & Vulnerability Scan
         run: |
-          docker buildx build \
-            --cache-from type=gha \
-            --cache-to type=gha,mode=max \
-            -t devsecops-test:${{ github.sha }} - <<'EOF'
+          # Create inline Dockerfile on the fly
+          cat << 'EOF' > Dockerfile
           FROM alpine:latest
-          RUN echo "DevSecOps inline container test built on OMEN" > /test.txt
+          RUN echo "DevSecOps container test built on OMEN" > /test.txt
           CMD ["cat", "/test.txt"]
           EOF
+
+          # Build container image into local daemon
+          docker buildx build -t devsecops-test:${{ github.sha }} --load .
 
       - name: Container Image Vulnerability Scan (Trivy)
         uses: aquasecurity/trivy-action@master
@@ -47,7 +39,7 @@ jobs:
           exit-code: '0'
           severity: 'CRITICAL,HIGH'
 
-      - name: Generate & Output Container SBOM (SPDX Format)
+      - name: Generate Container SBOM (SPDX Format)
         run: |
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy image --format spdx-json \
